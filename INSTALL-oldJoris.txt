@@ -1,0 +1,122 @@
+﻿/*----------------------------------------------------------------------------------------------------------------*\
+/*--------MemSched------------------------------------------------------------------------------------------------*\
+/*--------A Multi Resource server implmementation for multicore architectures-------------------------------------*\
+/*--------Developed by: MemSched group----------------------------------------------------------------------------*\
+/*----------------------------------------------------------------------------------------------------------------*\
+
+INSTALL:
+
+ First of all, type 'uname -r' in the command shell and you will get your kernel release string <RELEASE_STRING>
+ Then create the directory path /usr/src/kernels/<RELEASE_STRING>/include/resch
+
+ 1. make and install the RESCH core:
+	cd core
+	./configure --task=(the maximum nubmer of real-time tasks)
+	            --cpus=(the number of used CPUs)
+	make
+	sudo make install
+    by default, --task=64 and --cpus=NR_ONLINE_CPUS are applied.
+    you can also specify the following two options, if you want to enable
+    the load balancing function and the RLIMIT_RTTIME signal function 
+    respectively supported by the Linux scheduler.
+	--enable-load-balance
+	--enable-rlimit-rttime
+    by default, these options are disabled.
+
+ 2. make the RESCH library:
+	cd library
+	make 
+	
+ 3. you can now use RESCH. for example run a real-time task with 
+    priority 99 and period 3000ms:
+	cd sample
+	make
+	./rt_task 99 3000
+	
+	An easy way of getting started with a simple plugin is to use the sample programs in folder "mysample".
+        Dont forget to do 'make clean', './configure', 'make' and 'sudo make install' in the 'core' directory before.
+
+        cd mysample
+        chmod 777 start.sh
+        Type: sudo ./start.sh
+        
+	The script "start.sh" will start all 4 tasks.
+	The last argument to the task is the execution time length. Remember to adapt this value (as well as 'USEC_UNIT' in the task c-file).
+	The execution time length is just a for-loop bound and it will vary depending on your computers CPU frequency.
+
+	Wait for a minute.
+        cd trace
+        chmod 777 ftraceToGrasp.sh
+        chmod 777 convert.awk
+        Then type: ./ftraceToGrasp.sh 4 1000
+	You will now (hopefully) be able to see the task trace with the Grasp tool. If not, please contact us for support.
+	The Grasp tool (http://www.win.tue.nl/san/grasp/) is publicly available (Developer: Mike Holenderski).
+	Type './grasp out.txt' if you want to visualize the trace again. When you are finished, remove the out.txt file.
+
+ 4. you can also install MemSched:
+  	
+    cd plugin/hsf/hsf-fp
+    Open 'memsched.c' with your favorite editor. Change the following lines:
+
+    #include <../../kernels/2.6.31-20-generic-pae/include/resch/config.h>
+    #include <../../kernels/2.6.31-20-generic-pae/include/resch/core.h>
+
+    The '2.6.31-20-generic-pae' part should be replaced with the string generated with the shell command: 'uname -r'
+    Now, remember to issue 'make clean', './configure', and 'make' in the 'core' directory before you continue.
+    Do NOT type 'sudo make install' since this will be done by the 'hsf.sh' script.
+    Make 'hsf.sh' executable by typing 'chmod 777 hsf.sh'.
+    Then issue:
+    cd tasks
+    chmod 777 start.sh
+    make
+    cd ..
+    Finally, just type 'sudo ./hsf.sh' and let it finish.
+    cd trace
+    chmod 777 hsf-grasp.sh
+    chmod 777 ftraceToGrasp.sh
+    chmod 777 convert.awk
+    You can now view 2 traces (Ftrace and HSF-recorder) by typing these two commands (separately):
+       ./hsf-grasp.sh (to view the trace by the HSF-recorder)
+       ./ftraceToGrasp.sh (to view the trace by Ftrace)
+    You can zoom in and out in the Grasp tool by pressing the + and - buttons.
+    You will see that both traces are the same. However, 'hsf-grasp.sh' will also display the servers.
+   
+    #define NR_OF_SERVERS 5 defines the number of servers. This number must relate to the lines:
+
+   /* core-0 */
+   init_server(&SERVERS[0], 0, 24, 8 , 0, 0,550); // id,period(ms),budget(ms),prio(0 is H),core,budget(mem)
+   init_server(&SERVERS[1], 1, 40, 16, 1, 0,750); // id,period(ms),budget(ms),prio(1 is low),core,budget(mem)
+
+   /* core-1 */
+   init_server(&SERVERS[2], 2, 40, 8 , 2, 1,550); // id,period(ms),budget(ms),prio(M),core,budget(mem)
+   init_server(&SERVERS[3], 3, 80, 12, 1, 1,350); // id,period(ms),budget(ms),prio(H),core,budget(mem)
+   init_server(&SERVERS[4], 4, 100,12, 3, 1,750); // id,period(ms),budget(ms),prio(L),core,budget(mem)
+
+    I.e., 2 servers must correspond to 2 'init_server' lines. The parameters are set in ms but they will be converted
+    to 'jiffies'.
+    #define RUN_JIFFIES 30 defines the amount of jiffies to run the scheduler before halting.
+ 
+    queue.c and release-queue.c have important defines that decides the queue sizes. #define REL_Q_SIZE and
+    #define BITMAPSIZE define these sizes. They should be proportionate to the server release times. Contact us if
+    support is needed.
+
+    The task c-files in (in directory 'tasks') connect to servers through the function call 'rt_set_server()'.
+    'rt_set_server(0)' will connect to 'init_server(&SERVERS[0], 0, 24, 8 , 0, 0,550)' and 'rt_set_server(1)' will
+    connect to server ' init_server(&SERVERS[1], 1, 40, 16, 1, 0,750)'. Remember in task priority 97 is higher than 96 (opposite to servers).
+
+    Last but not least, observe that each server has a memory budget given as last argument in init_server. This is the number of 
+    last level cache misses a server can do. When one of the budgets depletes(CPU or Memory) the server is stopped and must wait for a new period.
+
+ 5. have fun on MemSched!
+    it would be nice if you could notify us of your developments!
+
+ 6. If you have questions regarding the multi-core scheduler plugins then please contact Shinpei Kato.
+    If you have questions regarding the hierarchical scheduler plugins (HSF) then please contact Mikael Åsberg.
+    If you have questions regarding MemSched(memory) then please contact Rafia Inam / Joris Slatman.
+    If you have questions regarding MemSched(multicore) then please contact Rafia Inam / Nesredin Mahmut.
+--
+ Thanks,
+ Shinpei Kato  <shinpei@is.nagoya-u.ac.jp>
+ Mikael Åsberg <mikael.asberg@mdh.se>
+ MemSched group <rafia.inam@mdh.se> <nesredin.mom@gmail.com> <joris_slatman@live.nl>
+ 
